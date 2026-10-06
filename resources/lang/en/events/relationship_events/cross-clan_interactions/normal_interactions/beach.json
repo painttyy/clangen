@@ -1,0 +1,107 @@
+[
+    {
+        "event_id": "beach_single_gulls1",
+        "location": [
+            "beach"
+        ],
+        "season": [
+            "any"
+        ],
+        "frequency": 4,
+        "strings": [
+            "m_c boasted about stealing fish from gulls, but r_c0 wasn't quite so enthused about stealing food from other animals."
+        ],
+        "involved_cats": {
+            "m_c": {
+                "stat": {
+                    "skill": [ "HUNTER,0", "CLEVER,0", "STEALTH,0", "FIGHTER,0" ]
+                }
+            },
+            "r_c0": {
+                "stat": {
+                    "trait": [ "compassionate", "loving" ]
+                }
+            }
+        },
+        "relationship_changes": [
+            {
+                "cats_from": [ "r_c0" ],
+                "cats_to": [ "m_c" ],
+                "values": [ "respect", "comfort" ],
+                "amount": -10,
+                "mutual": true,
+                "log": {
+                    "cats_from": "cat_from didn't like cat_to stealing from gulls."
+                }
+            }
+        ]
+    },
+    {
+        "event_id": "beach_single_gulls2",
+        "location": [
+            "beach"
+        ],
+        "season": [
+            "any"
+        ],
+        "frequency": 1,
+        "strings": [
+            "m_c boasted about {PRONOUN/m_c/poss} ability to steal fish from gulls. Yet when prompted for a demonstration, m_c only ended up forced to retreat by an angry flock, much to r_c0's amusement."
+        ],
+        "involved_cats": {
+            "m_c": {
+                "stat": {
+                    "must_have_both": true,
+                    "skill": [ "-HUNTER,0", "-CLEVER,0", "-STEALTH,0", "-FIGHTER,0" ],
+                    "trait": [
+                        "troublesome",
+                        "bold",
+                        "daring",
+                        "ambitious",
+                        "confident",
+                        "adventurous",
+                        "shameless",
+                        "arrogant",
+                        "competitive",
+                        "flamboyant"
+                    ]
+                }
+            },
+            "r_c0": {
+                "stat": {
+                    "trait": [ "-compassionate", "-loving", "-thoughtful", "-nervous" ]
+                }
+            }
+        },
+        "relationship_changes": [
+            {
+                "cats_from": [ "r_c0" ],
+                "cats_to": [ "m_c" ],
+                "values": [ "respect" ],
+                "amount": -10,
+                "mutual": false,
+                "log": {
+                    "cats_from": "cat_from watched cat_to embarrass {PRONOUN/cat_to/self} trying to steal from gulls."
+                }
+            },
+            {
+                "cats_from": [ "m_c" ],
+                "cats_to": [ "r_c0" ],
+                "values": [ "comfort" ],
+                "amount": -10,
+                "mutual": false,
+                "log": {
+                    "cats_from": "cat_from embarrassed {PRONOUN/cat_from/self} in front of cat_to by failing to steal from gulls."
+                }
+            }
+        ],
+        "condition": [
+            {
+                "cats": ["m_c"],
+                "condition": ["beak bite"],
+                "scar_history": "m_c was scarred by a gull when trying to impress r_c0.",
+                "non_lethal": true
+            }
+        ]
+    }
+]

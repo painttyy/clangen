@@ -1,0 +1,52 @@
+[
+    {
+        "event_id": "plains_group_cavein1",
+        "location": ["plains"],
+        "season": [
+            "newleaf", "leaf-fall"
+        ],
+        "frequency": 2,
+        "strings": [
+            "m_c was checking some tunnels after a recent heavy downpour, only to find r_c1 trapped. {PRONOUN/m_c/object/CAP} gathered r_c2 and r_c3 up to help dig {PRONOUN/r_c1/object} out."
+        ],
+        "involved_cats": {
+            "m_c": {
+                "stat": {
+                    "skill": [ "DIGGER,2" ]
+                }
+            },
+            "r_c0": {
+                "clan": 2,
+                "stat": {
+                    "skill": [ "-DIGGER,1" ]
+                }
+            },
+            "r_c1": {
+                "clan": 1,
+                "age": ["-senior"],
+                "stat": {
+                    "skill": ["DIGGER,1"]
+                }
+            },
+            "r_c2": {
+                "clan": 1,
+                "age": [ "-senior" ],
+                "stat": {
+                    "skill": [ "DIGGER,1" ]
+                }
+            }
+        },
+        "relationship_changes": [
+            {
+                "cats_from": [ "r_c0" ],
+                "cats_to": [ "m_c", "r_c1", "r_c2" ],
+                "values": [ "trust", "respect" ],
+                "amount": 15,
+                "mutual": false,
+                "log": {
+                    "cats_from": "cat_from was saved from a cave-in by cat_to."
+                }
+            }
+        ]
+    }
+]

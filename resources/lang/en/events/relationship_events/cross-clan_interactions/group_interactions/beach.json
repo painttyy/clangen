@@ -1,0 +1,55 @@
+[
+    {
+        "event_id": "beach_group_flood_protection1",
+        "location": [
+            "beach"
+        ],
+        "season": [
+            "newleaf"
+        ],
+        "strings": [
+            "Having heard c_n was facing a risk of flooding, o_c_n1 sent r_c0, r_c1, and r_c2 to help the preparations m_c was organising."
+        ],
+        "involved_cats": {
+            "m_c": {
+                "stat": {
+                    "skill": [ "CAMP,2" ]
+                }
+            },
+            "r_c0": {
+                "clan": 2,
+                "stat": {
+                    "skill": [ "CAMP,1" ]
+                }
+            },
+            "r_c1": {
+                "clan": 2,
+                "stat": {
+                    "skill": [ "CAMP,1" ]
+                }
+            },
+            "r_c2": {
+                "clan": 2,
+                "stat": {
+                    "skill": [ "CAMP,1" ]
+                }
+            }
+        },
+        "frequency": 3,
+        "relationship_changes": [
+            {
+                "cats_from": [ "m_c" ],
+                "cats_to": [ "r_c0", "r_c0", "r_c0" ],
+                "values": [ "trust", "respect" ],
+                "amount": 10,
+                "mutual": false,
+                "log": {
+                    "cats_from": "cat_to helped cat_from's Clan prepare protections against a flood."
+                }
+            }
+        ],
+        "required_reputation": {
+            "other_clan": ["ally"]
+        }
+    }
+]
