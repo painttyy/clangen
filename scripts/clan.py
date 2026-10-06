@@ -17,8 +17,9 @@ import i18n
 import ujson
 
 from scripts.cat.cats import Cat, BACKSTORIES
-from scripts.cat.enums import CatRank, CatGroup, CatSocial, CatCompatibility, CatThought
+from scripts.cat.enums import CatRank, CatGroup, CatSocial, CatCompatibility, CatThought, CatAge
 from scripts.cat.factories.new_cat_factory import NewCatFactory
+from scripts.cat.factories.create_example_cat import create_example_cats
 from scripts.cat.factories.typed_dicts import StatusDict
 from scripts.cat.names import Name
 from scripts.cat.save_load import (
@@ -302,13 +303,23 @@ class Clan:
                 Cat.all_cats[i].example = True
                 self.remove_cat(Cat.all_cats[i].ID)
 
+        number_other_clans = randint(3, 5)
+        for _ in range(number_other_clans):
+            other_clan = OtherClan()
+            self.all_other_clans.append(other_clan)
+            if self.clancount == "multiclan":  # multiclan
+                other_clan.populate()
+
         # give actions and relationships to cats
         for cat_id in Cat.all_cats:
             the_cat = Cat.all_cats.get(cat_id)
             init_all_relationships(the_cat)
             if the_cat != self.instructor:
                 the_cat.backstory = "clan_founder"
-            if the_cat.status.rank == CatRank.APPRENTICE:
+            if (
+                the_cat.status.rank == CatRank.APPRENTICE
+                and the_cat.status.alive_in_player_clan  # multiclan
+            ):
                 the_cat.rank_change(CatRank.APPRENTICE, new_thought=False)
 
         # find non-selected cats from the 12 generated starters
@@ -364,12 +375,6 @@ class Clan:
                 Cat.all_cats[c.ID] = c
                 Cat.all_cats_list.append(c)
                 self.clan_cats.append(c.ID)
-
-        save_cats(game.clan.save_id, Cat, game)
-        number_other_clans = randint(3, 5)
-        for _ in range(number_other_clans):
-            other_clan = OtherClan()
-            self.all_other_clans.append(other_clan)
 
         # remove any already loaded points of interest
         clear_pois()
@@ -802,6 +807,10 @@ class Clan:
                         temperament=other_clan["temperament"],
                         chosen_symbol=other_clan["chosen_symbol"],
                         ID=ID,
+                        leader=other_clan.get("leader"),  # multiclan
+                        deputy=other_clan.get("deputy"),  # multiclan
+                        medicine_cat=other_clan.get("medicine_cat"),  # multiclan
+                        leader_lives=other_clan.get("leader_lives", 9),  # multiclan
                     )
                 )
         else:
@@ -1320,6 +1329,10 @@ class OtherClan:
         temperament: tuple[str, str] = None,
         chosen_symbol: str = "",
         ID: int = 0,
+        leader=None,  # multiclan
+        deputy=None,  # multiclan
+        medicine_cat=None,  # multiclan
+        leader_lives=9,  # multiclan
     ):
         self.group_ID = ID
         if not self.group_ID:
@@ -1376,6 +1389,54 @@ class OtherClan:
             else clan_symbol_sprite(self, return_string=True)
         )
 
+    # multiclan: this Clan's leadership (None in single Clan mode)
+        self.leader = Cat.all_cats.get(leader) if leader else None
+        self.deputy = Cat.all_cats.get(deputy) if deputy else None
+        self.medicine_cat = Cat.all_cats.get(medicine_cat) if medicine_cat else None
+        self.leader_lives = leader_lives
+
+    def populate(self):
+        """
+        multiclan: generates a full roster of cats for this Clan,
+        including a leader, deputy, and medicine cat.
+        """
+        member_range = get_config("clan_creation.neighbourclan_cats")
+        new_cats = create_example_cats(
+            majority_rank=get_config("clan_creation.majority_rank"),
+            rank_weights=get_config("clan_creation.rank_weights"),
+            max_cats=randint(member_range[0], member_range[1]),
+            clan=self.group_ID,
+        )
+        for cat in new_cats:
+            game.clan.add_cat(cat)
+
+        grown_cats = [
+            c
+            for c in new_cats
+            if c.age not in (CatAge.NEWBORN, CatAge.KITTEN, CatAge.ADOLESCENT)
+        ]
+        if grown_cats:
+            self.leader = choice(grown_cats)
+            grown_cats.remove(self.leader)
+            self._set_rank(self.leader, CatRank.LEADER)
+        if grown_cats:
+            self.deputy = choice(grown_cats)
+            grown_cats.remove(self.deputy)
+            self._set_rank(self.deputy, CatRank.DEPUTY)
+        if grown_cats:
+            med_cats = [c for c in grown_cats if c.status.rank == CatRank.MEDICINE_CAT]
+            self.medicine_cat = med_cats[0] if med_cats else choice(grown_cats)
+            self._set_rank(self.medicine_cat, CatRank.MEDICINE_CAT)
+
+    @staticmethod
+    def _set_rank(cat, rank):
+        """
+        multiclan: changes an Other Clan cat's rank without touching the player Clan.
+        (Cat.rank_change() assumes the cat is in the player's Clan.)
+        """
+        cat.status._change_rank(rank)  # pylint: disable=protected-access
+        cat.name.status = rank
+
     def __repr__(self):
         # has indicators that this is unlocalized, just in case
         return f"!!{self.name}Clan!!"
@@ -1406,6 +1467,11 @@ class OtherClan:
             "relations": self.relations,
             "temperament": self.temperament,
             "chosen_symbol": self.chosen_symbol,
+            # multiclan
+            "leader": self.leader.ID if self.leader else None,
+            "deputy": self.deputy.ID if self.deputy else None,
+            "medicine_cat": self.medicine_cat.ID if self.medicine_cat else None,
+            "leader_lives": self.leader_lives,
         }
 
     def get_standing(self) -> Literal["ally", "neutral", "hostile"]:

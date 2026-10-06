@@ -12,18 +12,27 @@ if TYPE_CHECKING:
     from scripts.cat.cats import Cat
 
 
-def create_example_cats(majority_rank: CatRank, rank_weights: dict) -> list["Cat"]:
-    majority_rank_cats = sample(range(12), 3)
+def create_example_cats(
+    majority_rank: CatRank, rank_weights: dict, max_cats=12, clan=None
+) -> list["Cat"]:
+    """
+    :param max_cats: how many cats to create (multiclan)
+    :param clan: group_ID of the Clan the cats belong to, None for the player Clan (multiclan)
+    """
+    majority_rank_cats = sample(range(max_cats), min(3, max_cats))
+    status_dict = {"group_ID": clan} if clan else None
 
     chosen_cats = []
-    for cat_index in range(12):
+    for cat_index in range(max_cats):
         if cat_index in majority_rank_cats:
-            chosen_cats.append(NewCatFactory.create_cat(rank=majority_rank))
+            rank = majority_rank
         else:
-            random_rank = choices(
-                list(rank_weights.keys()), list(rank_weights.values())
-            )[0]
-            chosen_cats.append(NewCatFactory.create_cat(rank=random_rank))
+            rank = choices(list(rank_weights.keys()), list(rank_weights.values()))[0]
+        chosen_cats.append(
+            NewCatFactory.create_cat(
+                rank=rank, status_dict=dict(status_dict) if status_dict else None
+            )
+        )
 
     return chosen_cats
 
