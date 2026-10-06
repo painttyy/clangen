@@ -1174,3 +1174,16 @@ dev_tools = false
     ally = 30
     neutral = 17
     hostile = 7
+
+# multiclan: settings for the neighbouring Clans
+[multiclan]
+# chance (0 to 1) each moon that each neighbouring Clan has a litter
+litter_chance = 0.15
+# Clans smaller than this are three times as likely to have a litter
+min_clan_size = 8
+# Clans this size or bigger won't have litters
+max_clan_size = 25
+# smallest and largest litter
+litter_size = [1, 6]
+# moons a queen waits before she can have another litter
+birth_cooldown = 6

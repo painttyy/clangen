@@ -44,6 +44,7 @@ from scripts.events_module.ceremony.perform_ceremony import (
 
 from scripts.events_module.generate_events import GenerateEvents, generate_events
 from scripts.events_module.focus import handle_focus
+from scripts.events_module.multiclan.other_clan_events import handle_other_clans  # multiclan
 from scripts.events_module.outsider import outsider_events
 from scripts.events_module.patrol.patrol import Patrol
 from scripts.events_module.relationship import relation_events
@@ -152,6 +153,8 @@ def one_moon():
             one_moon_cat(cat)
         elif not cat.status.group or cat.status.is_other_clancat:
             one_moon_outside_cat(cat, other_clan_cats)
+    # multiclan: keep the neighbouring Clans running
+    handle_other_clans()
 
     # keeping this commented out till disasters are more polished
     # note: when we actually use this, import scripts.events_module.ongoing.disaster_events
