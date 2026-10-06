@@ -91,6 +91,7 @@ class Clan:
         starting_members=None,
         starting_season="Newleaf",
         self_run_init_functions=True,
+        clan_count_mode="singleclan",
     ):
         """
         :param save_id: The save file name for the Clan, this should not be used for player-facing text beyond the save file screen
@@ -104,6 +105,7 @@ class Clan:
 
         self.save_id = save_id
         self.name = display_name if display_name else save_id
+        self.clancount = clan_count_mode
 
         # needs to happen immediately so that any config retrievals will be accurate
         self.cruel_cards: list[str] = cruel_cards if cruel_cards else []
@@ -244,12 +246,13 @@ class Clan:
             "clan.settings has been deprecated, use get_clan_setting() and set_clan_setting() instead. Unrecoverable."
         )
 
-    def create_clan(self):
+    def create_clan(self, clancount="singleclan"):
         """
         This function is only called once a new clan is
         created in the 'clan created' screen, not every time
         the program starts
         """
+        self.clancount = clancount
         game.reset_used_group_IDs()
         switch_set_value(Switch.clan_save_id, self.save_id)
         reset_loaded_clan_settings()
@@ -534,6 +537,7 @@ class Clan:
             "biome": self.biome,
             "camp_bg": self.camp_bg,
             "clan_symbol": self.chosen_symbol,
+            "clancount_mode": self.clancount,
             "gamemode": self.game_mode,
             "cruel_cards": self.cruel_cards,
             "used_group_IDs": game.used_group_IDs,
@@ -739,6 +743,7 @@ class Clan:
                 game.used_group_IDs[ID] = CatGroup(game.used_group_IDs[ID])
 
         game.clan.reputation = clan_data["reputation"]
+        game.clan.clancount = clan_data.get("clancount_mode", "singleclan")
 
         game.clan.age = clan_data["clanage"]
         game.clan.starting_season = (

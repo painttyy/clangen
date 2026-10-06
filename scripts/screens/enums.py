@@ -9,6 +9,7 @@ class GameScreen(StrEnum):
     EVENT_EDIT = "event_edit_screen"
 
     # make clan screens
+    MAKE_CLAN_CHOOSE_CLANCOUNT = "choose_clancount_screen"
     MAKE_CLAN_CHOOSE_MODE = "choose_mode_screen"
     MAKE_CLAN_CHOOSE_CARDS = "choose_cards_screen"
     MAKE_CLAN_CHOOSE_NAME = "choose_name_screen"

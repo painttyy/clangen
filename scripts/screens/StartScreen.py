@@ -77,7 +77,7 @@ class StartScreen(Screens):
             screens = {
                 self.elements["continue"]: GameScreen.CAMP,
                 self.elements["switch_clan"]: GameScreen.SWITCH_CLAN,
-                self.elements["new_clan"]: GameScreen.MAKE_CLAN_CHOOSE_MODE,
+                self.elements["new_clan"]: GameScreen.MAKE_CLAN_CHOOSE_CLANCOUNT,
                 self.elements["settings"]: GameScreen.SETTINGS,
             }
             if element in screens and not self.error_open:

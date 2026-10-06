@@ -59,6 +59,7 @@ class ClanInfo:
     symbol: str = ""
     starting_season: str = "Newleaf"
     game_mode: str = "classic"
+    clan_count_mode: str = "singleclan"
     cruel_cards: list[str] = field(default_factory=list)
 
     def clear(self):
@@ -75,6 +76,7 @@ class ClanInfo:
         self.symbol = ""
         self.starting_season = "Newleaf"
         self.game_mode = "classic"
+        self.clan_count_mode = "singleclan"
         self.cruel_cards = []
 
     def clear_cats(self):
@@ -94,6 +96,7 @@ class ClanInfo:
         self.symbol = saved_info["symbol"]
         self.starting_season = saved_info["starting_season"]
         self.game_mode = saved_info["game_mode"]
+        self.clan_count_mode = saved_info.get("clan_count_mode", "singleclan")
         self.cruel_cards = saved_info["cruel_cards"]
 
     def get_dict(self) -> dict:
@@ -111,6 +114,7 @@ class ClanInfo:
             "symbol": self.symbol,
             "starting_season": self.starting_season,
             "game_mode": self.game_mode,
+            "clan_count_mode": self.clan_count_mode,
             "cruel_cards": self.cruel_cards,
         }
 
@@ -256,7 +260,7 @@ class MakeClanScreenBase(Screens):
             save_id=save_id,
             **self.clan_info.get_dict(),
         )
-        game.clan.create_clan()
+        game.clan.create_clan(self.clan_info.clan_count_mode)
 
         game.cur_events_list.clear()
         game.herb_events_list.clear()

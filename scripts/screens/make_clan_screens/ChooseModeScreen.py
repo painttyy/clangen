@@ -45,7 +45,7 @@ class ChooseModeScreen(MakeClanScreenBase):
                 ),
             )
 
-        self.elements["previous_step"].disable()
+        self.elements["previous_step"].enable()
         self.elements["next_step"].enable()
 
         self.set_mute_button_position("topright")
@@ -137,7 +137,8 @@ class ChooseModeScreen(MakeClanScreenBase):
                 self.game_mode = "cruel_season"
                 self.refresh_text_and_buttons()
 
-            # NEXT STEP
+            elif event.ui_element == self.elements["previous_step"]:
+                self.change_screen(GameScreen.MAKE_CLAN_CHOOSE_CLANCOUNT)
             elif event.ui_element == self.elements["next_step"]:
                 game_setting_set("game_mode", self.game_mode)
                 self.clan_info.game_mode = self.game_mode
@@ -201,8 +202,10 @@ class ChooseModeScreen(MakeClanScreenBase):
         game_mode = (
             self.clan_info.game_mode
         )  # save game mode, that's the only choice we want to preserve
+        clancount = self.clan_info.clan_count_mode
         self.clan_info.clear()
         self.clan_info.game_mode = game_mode
+        self.clan_info.clan_count_mode = clancount
 
         if self.clan_info.game_mode == "cruel_season":
             for i in range(randint(3, 8)):

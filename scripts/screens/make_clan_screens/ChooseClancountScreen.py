@@ -2,12 +2,7 @@
 import pygame
 import pygame_gui
 
-from scripts.cat.factories.create_example_cat import create_example_cats
-from scripts.clan_package.settings.clan_settings import reset_loaded_clan_settings
-from scripts.config import reset_config
 from scripts.game_structure import image_cache
-from scripts.game_structure.game import Switch
-from scripts.game_structure.game.switches import switch_set_value
 from scripts.game_structure.screen_settings import MANAGER
 from scripts.screens.enums import GameScreen
 from scripts.screens.make_clan_screens.MakeClanScreenBase import MakeClanScreenBase
@@ -25,14 +20,6 @@ class ChooseClancountScreen(MakeClanScreenBase):
         self.clan_count_mode = "singleclan"
 
     def screen_switches(self):
-        # Reset variables
-        reset_loaded_clan_settings()
-        reset_config()
-        switch_set_value(Switch.possible_cats, create_example_cats(
-            majority_rank=self.get_config_during_creation("clan_creation.majority_rank"),
-            rank_weights=self.get_config_during_creation("clan_creation.rank_weights"),
-        ))
-
         super().screen_switches()
         self.elements["previous_step"].disable()
         self.elements["next_step"].enable()
@@ -68,7 +55,7 @@ class ChooseClancountScreen(MakeClanScreenBase):
         )
 
         self.elements["game_mode_warning"] = pygame_gui.elements.UITextBox(
-            "screens.make_clan.game_mode_warning",
+            "screens.make_clan.clan_count_warning",
             ui_scale(pygame.Rect((100, 581), (600, 40))),
             object_id=get_text_box_theme("#text_box_30_horizcenter"),
             manager=MANAGER,

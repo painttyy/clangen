@@ -14,6 +14,7 @@ MENU_SCREENS = [
     GameScreen.SETTINGS,
     GameScreen.START,
     GameScreen.SWITCH_CLAN,
+    GameScreen.MAKE_CLAN_CHOOSE_CLANCOUNT,
     GameScreen.MAKE_CLAN_CHOOSE_MODE,
     GameScreen.MAKE_CLAN_CHOOSE_CARDS,
     GameScreen.MAKE_CLAN_CHOOSE_NAME,
