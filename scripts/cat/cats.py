@@ -2527,10 +2527,34 @@ class Cat:
                 if check_cat.status.group_ID == self.status.group_ID
             ]
 
+        # multiclan: neighbouring Clan cats only page through their own Clan,
+        # and cats outside the Clan don't page into neighbouring Clans
+        multiclan_outside = (
+            not self.dead
+            and game.clan
+            and game.clan.clancount == "multiclan"
+            and not self.status.alive_in_player_clan
+        )
+        if multiclan_outside:
+            if self.status.is_other_clancat:
+                sorted_specific_list = [
+                    check_cat
+                    for check_cat in sorted_specific_list
+                    if check_cat.status.group_ID == self.status.group_ID
+                ]
+            else:
+                sorted_specific_list = [
+                    check_cat
+                    for check_cat in sorted_specific_list
+                    if not check_cat.status.is_other_clancat
+                ]
+
         filter_near = (
             not self.dead and (self.status.is_outsider or self.status.is_other_clancat)
         ) or self.status.group == CatGroup.UNKNOWN_RESIDENCE
-        if filter_near:
+        if filter_near and not (
+            multiclan_outside and self.status.is_other_clancat
+        ):  # multiclan
             sorted_specific_list = [
                 check_cat
                 for check_cat in sorted_specific_list
