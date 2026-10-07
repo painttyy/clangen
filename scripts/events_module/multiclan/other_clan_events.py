@@ -32,9 +32,111 @@ def handle_other_clans():
         for cat in members:
             if cat.birth_cooldown:
                 cat.birth_cooldown -= 1
+            handle_conditions(cat, clan)
+
+        # some cats may have died from their injuries
+        members = get_members(clan)
+        if not members:
+            continue
 
         handle_succession(clan, members)
         handle_litters(clan, members)
+
+
+def handle_conditions(cat, clan):
+    for conditions in (cat.injuries, cat.illnesses):
+        for name, info in list(conditions.items()):
+            if cat.dead:
+                return
+            if name == "pregnant":
+                continue
+
+            # conditions don't do anything the moon they're gained
+            if info.get("event_triggered"):
+                info["event_triggered"] = False
+                continue
+
+            mortality = info.get("mortality", 0)
+            # leaders have a higher chance of death, same as in your Clan
+            if cat.status.is_leader and mortality:
+                mortality = max(1, int(mortality * 0.7))
+
+            if mortality and not int(random.random() * mortality):
+                condition_death(cat, clan, name)
+                continue
+
+            if game.clan.age - info.get("moon_start", 0) >= info.get("duration", 0):
+                del conditions[name]
+
+
+def condition_death(cat, clan, condition_name):
+    """A neighbouring Clan cat dies (or their leader loses a life) from a condition."""
+    was_leader = cat.status.is_leader
+    cat.history.add_death(
+        death_text=f"m_c died from {condition_name}."
+    )
+    cat.die()
+    if cat.dead:
+        game.cur_events_list.append(
+            EventInformation(
+                f"{'The leader of ' + str(clan.name) + ', ' if was_leader else ''}"
+                f"{cat.name} of {clan.name} has died from {condition_name}.",
+                ["birth_death", "other_clans"],
+                cat_dict={"m_c": cat},
+            )
+        )
+
+
+def other_clan_leader_loses_life(cat) -> bool:
+    """
+    Called when a neighbouring Clan's leader dies. If they have lives to spare,
+    they lose one and come back. Returns True if the leader survived.
+    """
+    clan = next(
+        (c for c in game.clan.all_other_clans if c.group_ID == cat.status.group_ID),
+        None,
+    )
+    if not clan or clan.leader is not cat:
+        return False
+    if clan.leader_lives <= 1:
+        clan.leader_lives = 0
+        return False
+
+    clan.leader_lives -= 1
+    cat.injuries.clear()
+    cat.illnesses.clear()
+    lives = clan.leader_lives
+    other_clan_event(
+        f"{cat.name} lost a life, but StarClan sent them back to lead {clan.name}. "
+        f"{lives} {'life remains' if lives == 1 else 'lives remain'}.",
+        cat,
+    )
+    return True
+
+
+def hide_neighbour_events():
+    """
+    Events that only involve neighbouring Clan cats are moved off the main
+    events page; they still show under Other Clans.
+    """
+    if not game.clan or game.clan.clancount != "multiclan":
+        return
+    if get_config("multiclan.show_neighbour_events_in_all"):
+        return
+
+    neighbour_ids = {c.group_ID for c in game.clan.all_other_clans}
+    for event in game.cur_events_list:
+        if "other_clans" not in event.types or "interaction" in event.types:
+            continue
+        cats = [Cat.fetch_cat(cat_id) for cat_id in event.cats_involved]
+        cats = [c for c in cats if c]
+        if cats and all(
+            (c.status.get_last_living_group() if c.dead else c.status.group_ID)
+            in neighbour_ids
+            for c in cats
+        ):
+            # "interaction" is what ClanGen uses to keep minor events off the main page
+            event.types.append("interaction")
 
 
 def get_members(clan) -> list:

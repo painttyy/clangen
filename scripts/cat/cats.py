@@ -490,6 +490,14 @@ class Cat:
         that grief messages will align with body status
         :param grief_allowed: defaults to True, set to False if death should not trigger grief
         """
+        # multiclan: neighbouring Clan leaders have their own nine lives
+        if self.status.is_leader and self.status.is_other_clancat:
+            from scripts.events_module.multiclan.other_clan_events import (
+                other_clan_leader_loses_life,
+            )
+
+            if other_clan_leader_loses_life(self):
+                return
         if (
             self.status.is_leader
             and "pregnant" in self.injuries
@@ -507,7 +515,7 @@ class Cat:
             self.illnesses.clear()
 
         # Deal with leader death
-        if self.status.is_leader:
+        if self.status.is_leader and not self.status.is_other_clancat:  # multiclan
             if game.clan.leader_lives > 0:
                 self.assign_thought(CatThought.ON_DEATH)
                 return

@@ -1189,3 +1189,5 @@ litter_size = [1, 6]
 birth_cooldown = 6
 # most cross-clan relationship events per moon
 max_crossclan_events = 6
+# show events that only involve neighbouring Clans on the main events page too
+show_neighbour_events_in_all = false
