@@ -322,6 +322,15 @@ class Clan:
             ):
                 the_cat.rank_change(CatRank.APPRENTICE, new_thought=False)
 
+        # multiclan: cats only start out knowing their own Clanmates
+        if self.clancount == "multiclan":
+            for the_cat in Cat.all_cats.values():
+                the_cat.relationships = {
+                    other_id: rel
+                    for other_id, rel in the_cat.relationships.items()
+                    if not self._in_different_clans(the_cat, Cat.all_cats.get(other_id))
+                }
+
         # find non-selected cats from the 12 generated starters
         for c in switch_get_value(Switch.possible_cats):
             if c.ID not in Cat.all_cats:
@@ -405,6 +414,17 @@ class Clan:
 
         # makes sure all the settings are at their starting positions
         self._adjust_settings()
+
+    @staticmethod
+    def _in_different_clans(cat, other_cat) -> bool:
+        """multiclan: True if both cats are living Clan cats from different Clans."""
+        if not other_cat or cat.dead or other_cat.dead:
+            return False
+        if not (cat.status.alive_in_player_clan or cat.status.is_other_clancat):
+            return False
+        if not (other_cat.status.alive_in_player_clan or other_cat.status.is_other_clancat):
+            return False
+        return cat.status.group_ID != other_cat.status.group_ID
 
     @staticmethod
     def _adjust_settings():

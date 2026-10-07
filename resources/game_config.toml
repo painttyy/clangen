@@ -1187,3 +1187,5 @@ max_clan_size = 25
 litter_size = [1, 6]
 # moons a queen waits before she can have another litter
 birth_cooldown = 6
+# most cross-clan relationship events per moon
+max_crossclan_events = 6
