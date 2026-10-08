@@ -8,13 +8,16 @@ of kits so they don't dwindle away.
 
 import random
 
+import i18n
+
 from scripts.cat.cats import Cat
 from scripts.cat.enums import CatAge, CatRank
 from scripts.cat.factories.new_cat_factory import NewCatFactory
 from scripts.cat_relations.cat_handle_funcs import create_relationships_new_cat
 from scripts.config import get_config
 from scripts.events_module.event_information import EventInformation
-from scripts.game_structure import game
+from scripts.game_structure import constants, game
+from scripts.game_structure.localization import load_lang_resource
 
 ADULT_AGES = (CatAge.YOUNG_ADULT, CatAge.ADULT, CatAge.SENIOR_ADULT)
 
@@ -36,12 +39,18 @@ def handle_other_clans():
                 cat.birth_cooldown -= 1
             handle_conditions(cat, clan)
 
-        # some cats may have died from their injuries
+        handle_natural_deaths(clan, members)
+
+        # some cats may have died from their injuries or naturally
         members = get_members(clan)
         if not members:
             continue
 
+        handle_joiners(clan, members)
+        members = get_members(clan)
+
         handle_succession(clan, members)
+        handle_relationships(clan, members)
         handle_mates(clan, members)
         handle_litters(clan, members)
 
@@ -96,6 +105,98 @@ def handle_conditions(cat, clan):
 
             if game.clan.age - info.get("moon_start", 0) >= info.get("duration", 0):
                 del conditions[name]
+
+
+def handle_joiners(clan, members):
+    """
+    Now and then a loner or rogue joins a neighbouring Clan. This brings in new
+    blood: without it, small Clans become so interrelated that nobody can find
+    a mate, and they slowly die out.
+    """
+    if len(members) >= get_config("multiclan.max_clan_size"):
+        return
+    chance = get_config("multiclan.joiner_chance")
+    if len(members) < get_config("multiclan.min_clan_size"):
+        chance *= 3
+    if not any(
+        c.gender == "female" and c.age in ADULT_AGES for c in members
+    ) or not any(c.gender == "male" and c.age in ADULT_AGES for c in members):
+        chance *= 3  # a Clan with no adult she-cats or toms badly needs new cats
+    if random.random() > chance:
+        return
+
+    backstory = random.choice(["loner1", "rogue1"])
+    new_cat = NewCatFactory.create_cat(
+        moons=random.randint(14, 60),
+        status_dict={"rank": CatRank.WARRIOR, "group_ID": clan.group_ID},
+        backstory=backstory,
+    )
+    game.clan.add_cat(new_cat)
+    create_relationships_new_cat(new_cat)
+    other_clan_event(
+        f"A {'loner' if backstory == 'loner1' else 'rogue'} has joined {clan.name}, "
+        f"taking the name {new_cat.name}.",
+        new_cat,
+    )
+
+
+def handle_natural_deaths(clan, members):
+    """
+    Neighbouring Clan cats die at the same rates as cats in your Clan:
+    a small random chance each moon, old age past old_age_death_start,
+    and leaders losing lives more often.
+    """
+    for cat in members:
+        if cat.dead:
+            continue
+        cause = natural_death_cause(cat)
+        if cause:
+            natural_death(cat, clan, cause)
+
+
+def natural_death_cause(cat):
+    if cat.status.is_leader and not int(
+        random.random() * get_config("death_related.leader_death_chance")
+    ):
+        return "leader"
+
+    # same old age curve ClanGen uses for your Clan
+    age_start = constants.CONFIG["death_related"]["old_age_death_start"]
+    curve = 0.001 * constants.CONFIG["death_related"]["old_age_death_curve"]
+    old_age_chance = ((1 + curve) ** (cat.moons - age_start)) - 1
+    if random.random() <= old_age_chance or cat.moons >= 300:
+        return "old_age"
+
+    path = (
+        "death_related.classic_death_chance"
+        if game.clan.game_mode == "classic"
+        else "death_related.death_chance"
+    )
+    if not int(random.random() * get_config(path)):
+        return "random"
+    return None
+
+
+def natural_death(cat, clan, cause):
+    if cause == "old_age":
+        if clan.leader is cat:
+            clan.leader_lives = 1  # old age takes all of a leader's lives
+        cat.history.add_death(death_text="m_c died of old age.")
+        text = (
+            f"{cat.name} of {clan.name} passed away peacefully in their sleep "
+            "after a long life."
+        )
+    else:
+        deaths = load_lang_resource("events/death/outsider_deaths/outsider_deaths.json")
+        text = random.choice(deaths["other_clan"]).replace("o_c_n", str(clan.name))
+        history = i18n.t("events.death.outsider_deaths.history.other_clan")
+        cat.history.add_death(death_text=history.replace("o_c_n", str(clan.name)))
+
+    cat.die(grief_allowed=False)
+    if cat.dead:
+        game.cur_events_list.append(
+            EventInformation(text, ["birth_death", "other_clans"], cat_dict={"m_c": cat})
+        )
 
 
 def condition_death(cat, clan, condition_name):
@@ -267,6 +368,64 @@ def handle_succession(clan, members):
             elif warriors:
                 clan.medicine_cat = random.choice(warriors)
                 set_rank(clan.medicine_cat, CatRank.MEDICINE_CAT)
+
+
+def handle_relationships(clan, members):
+    """
+    Neighbouring Clan cats interact with their Clanmates each moon, so their
+    friendships, rivalries and crushes grow and change like your Clan's do.
+    Uses ClanGen's own relationship interactions.
+    """
+    # imported here to avoid a circular import
+    from scripts.events_module.relationship import relation_events
+    from scripts.cat_relations.enums import RelType
+
+    first_new_event = len(game.cur_events_list)
+    chance = get_config("multiclan.neighbour_interaction_chance")
+    active = [c for c in members if c.status.rank != CatRank.NEWBORN]
+
+    for cat in active:
+        if random.random() > chance:
+            continue
+        clanmates = [c for c in active if c is not cat]
+        if not clanmates:
+            continue
+
+        # everyday interaction with a random Clanmate
+        relation_events._trigger_pair_event(  # pylint: disable=protected-access
+            cat, random.choice(clanmates)
+        )
+
+        # sometimes, a romantic moment with their mate or a cat they get along with
+        if cat.moons >= 12 and not random.getrandbits(3):
+            crushes = [
+                c
+                for c in clanmates
+                if c.ID in cat.mate
+                or (
+                    not cat.no_mates
+                    and cat.is_potential_mate(c, for_love_interest=True)
+                    and get_like(cat, c) > 10
+                    and get_like(c, cat) > 10
+                )
+            ]
+            if crushes:
+                relation_events._trigger_pair_event(  # pylint: disable=protected-access
+                    cat, random.choice(crushes), RelType.ROMANCE
+                )
+
+    # move the interaction events to the Other Clans tab, or drop them
+    new_events = game.cur_events_list[first_new_event:]
+    del game.cur_events_list[first_new_event:]
+    if get_config("multiclan.show_neighbour_interactions"):
+        for event in new_events:
+            event.types = ["other_clans", "interaction"]
+        game.cur_events_list.extend(new_events)
+
+
+def get_like(cat, other) -> int:
+    rel = cat.relationships.get(other.ID)
+    return max(rel.like, rel.comfort) if rel else 0
 
 
 def handle_mates(clan, members):
@@ -442,7 +601,7 @@ def create_litter(clan, mother, father, half_clan=False):
 
 def player_halfclan_pregnancy(pregnant_cat, second_parent) -> bool:
     """
-    When one of your cats has kits with a
+    Called from ClanGen's pregnancy code when one of your Clan cats has kits with a
     neighbouring Clan cat. If the neighbour is the one who would carry the kits,
     they're born into the neighbour's Clan instead. Returns True if handled here.
     """

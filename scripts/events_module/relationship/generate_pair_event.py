@@ -38,7 +38,15 @@ def trigger_interaction(
     :return: True if interaction occurred, False otherwise
     """
     # only interact between two player clan cats
-    if (
+    # multiclan: or two living cats of the same neighbouring Clan
+    same_neighbour_clan = (
+        main_cat.status.is_other_clancat
+        and other_cat.status.is_other_clancat
+        and not main_cat.dead
+        and not other_cat.dead
+        and main_cat.status.group_ID == other_cat.status.group_ID
+    )
+    if not same_neighbour_clan and (
         not main_cat.status.alive_in_player_clan
         or not other_cat.status.alive_in_player_clan
     ):

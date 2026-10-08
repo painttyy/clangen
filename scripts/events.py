@@ -786,7 +786,10 @@ def one_moon_outside_cat(cat, other_clan_cats: list = None):
     cat.skills.progress_skill(cat)
     pregnancy_events.handle_having_kits(cat)
 
-    if not cat.dead:
+    # multiclan: neighbouring Clan cats have their own natural deaths instead
+    if not cat.dead and not (
+        game.clan.clancount == "multiclan" and cat.status.is_other_clancat
+    ):
         outsider_events.killing_outsiders(cat)
 
 

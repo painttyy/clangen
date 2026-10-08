@@ -1199,3 +1199,9 @@ halfclan_kits = true
 halfclan_min_romance = 10
 # chance (0 to 1) a mated cat in love with another Clan's cat has kits with them instead of their mate
 halfclan_affair_chance = 0.2
+# chance (0 to 1) each neighbouring cat interacts with a Clanmate each moon
+neighbour_interaction_chance = 0.6
+# list neighbouring cats' everyday interactions under Other Clans (can be a lot of events)
+show_neighbour_interactions = false
+# chance (0 to 1) each moon that a loner or rogue joins each neighbouring Clan
+joiner_chance = 0.04
