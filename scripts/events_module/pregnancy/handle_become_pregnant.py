@@ -13,11 +13,21 @@ from scripts.events_module.pregnancy.build_strings import (
 from scripts.events_module.pregnancy.create_kits import get_amount_of_kits, get_kits
 from scripts.events_module.text_adjust import event_text_adjust
 from scripts.game_structure import game
+from scripts.config import get_config  # multiclan
 
 
 def handle_zero_moon_pregnant(cat: Cat, other_cat: Optional[Cat] = None):
     """Handles if the cat is zero moons pregnant."""
-    if other_cat and (
+    # multiclan: half-Clan kits with a cat from a neighbouring Clan
+    halfclan = bool(
+        other_cat
+        and other_cat.status.is_other_clancat
+        and not other_cat.dead
+        and not other_cat.birth_cooldown
+        and game.clan.clancount == "multiclan"
+        and get_config("multiclan.halfclan_kits")
+    )
+    if other_cat and not halfclan and (
         not other_cat.status.alive_in_player_clan or other_cat.birth_cooldown
     ):
         return
@@ -38,6 +48,15 @@ def handle_zero_moon_pregnant(cat: Cat, other_cat: Optional[Cat] = None):
         # therefore the main cat will be used, regarding of gender
         pregnant_cat = cat
         second_parent = other_cat
+
+    # multiclan: if the neighbouring cat carries the kits, they're born in her Clan
+    if halfclan and pregnant_cat is other_cat:
+        from scripts.events_module.multiclan.other_clan_events import (
+            player_halfclan_pregnancy,
+        )
+
+        player_halfclan_pregnancy(pregnant_cat, second_parent)
+        return
         _create_pregnancy_data(pregnant_cat, second_parent)
         _handle_pregnancy_notice(pregnant_cat, second_parent)
         return

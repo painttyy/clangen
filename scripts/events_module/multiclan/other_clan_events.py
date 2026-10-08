@@ -24,6 +24,8 @@ def handle_other_clans():
     if not game.clan or game.clan.clancount != "multiclan":
         return
 
+    mark_halfclan_kits()
+
     for clan in game.clan.all_other_clans:
         members = get_members(clan)
         if not members:
@@ -40,10 +42,37 @@ def handle_other_clans():
             continue
 
         handle_succession(clan, members)
+        handle_mates(clan, members)
         handle_litters(clan, members)
 
 
+def mark_halfclan_kits():
+    """
+    Kits just born in YOUR Clan with a parent from a neighbouring Clan get the
+    half-Clan backstory (ClanGen's own birth code doesn't know about neighbours).
+    """
+    neighbour_ids = {c.group_ID for c in game.clan.all_other_clans}
+    for kit in Cat.all_cats_list:
+        if kit.moons != 0 or kit.dead or not kit.status.alive_in_player_clan:
+            continue
+        for parent_id in (kit.parent1, kit.parent2):
+            parent = Cat.fetch_cat(parent_id) if parent_id else None
+            if parent and (
+                parent.status.get_last_living_group() if parent.dead else parent.status.group_ID
+            ) in neighbour_ids:
+                kit.backstory = "halfclan1"
+                break
+
+
 def handle_conditions(cat, clan):
+    """
+    Official ClanGen doesn't run injuries and illnesses for cats outside your Clan,
+    so this does a simpler version for neighbouring Clan cats: each moon a condition
+    can kill them (using the same mortality as your Clan's cats), otherwise they
+    recover once it has run its course.
+
+    Cat.moon_skip_injury() isn't used because it would take lives from YOUR leader.
+    """
     for conditions in (cat.injuries, cat.illnesses):
         for name, info in list(conditions.items()):
             if cat.dead:
@@ -240,6 +269,59 @@ def handle_succession(clan, members):
                 set_rank(clan.medicine_cat, CatRank.MEDICINE_CAT)
 
 
+def handle_mates(clan, members):
+    """Neighbouring Clan cats pair up as mates, and widowed cats eventually move on."""
+    # moving on: a cat whose mates have all died may unset them after a while
+    for cat in members:
+        if not cat.mate:
+            continue
+        mates = [Cat.fetch_cat(m) for m in cat.mate]
+        if all(m is None or m.dead for m in mates) and random.random() < 1 / 12:
+            for mate in mates:
+                if mate:
+                    cat.unset_mate(mate)
+
+    if random.random() > get_config("multiclan.mate_chance"):
+        return
+
+    singles = [
+        c
+        for c in members
+        if c.age.can_have_mate()
+        and c.moons >= 14
+        and not c.no_mates
+        and not living_mates(c)
+    ]
+    random.shuffle(singles)
+    for cat in singles:
+        partners = [
+            other
+            for other in singles
+            if other is not cat and cat.is_potential_mate(other)
+        ]
+        if not partners:
+            continue
+        # cats who already have feelings for each other are more likely to pair up
+        weights = [max(1, romance(cat, other) + 10) for other in partners]
+        partner = random.choices(partners, weights)[0]
+        cat.set_mate(partner)
+        other_clan_event(
+            f"{cat.name} and {partner.name} of {clan.name} have become mates.",
+            cat,
+        )
+        return
+
+
+def living_mates(cat) -> list:
+    mates = [Cat.fetch_cat(m) for m in cat.mate]
+    return [m for m in mates if m and not m.dead]
+
+
+def romance(cat, other) -> int:
+    rel = cat.relationships.get(other.ID)
+    return rel.romance if rel else 0
+
+
 def handle_litters(clan, members):
     if len(members) >= get_config("multiclan.max_clan_size"):
         return
@@ -259,23 +341,63 @@ def handle_litters(clan, members):
         and not c.birth_cooldown
         and not c.no_kits
     ]
-    if not mothers:
-        return
-    mother = random.choice(mothers)
+    random.shuffle(mothers)
+    for mother in mothers:
+        father, half_clan = choose_father(mother, clan)
+        if father:
+            create_litter(clan, mother, father, half_clan)
+            return
 
-    # prefer the mother's mate if they're in the same Clan, otherwise a random tom
-    fathers = [
-        c for c in members if c.ID in mother.mate and c.gender == "male"
-    ] or [
-        c
-        for c in members
-        if c.gender == "male"
-        and c.age in ADULT_AGES
-        and not c.no_kits
-        and not close_family(c, mother)
+
+def choose_father(mother, clan):
+    """
+    Returns (father, is_half_clan). Mothers have kits with their mate, or, if
+    half-Clan kits are on, sometimes with a cat from another Clan they love.
+    """
+    mates = [
+        m
+        for m in living_mates(mother)
+        if m.gender == "male" and m.status.group_ID == clan.group_ID and not m.no_kits
     ]
-    father = random.choice(fathers) if fathers else None
+    love = halfclan_love(mother)
+    if love and (not mates or random.random() < get_config("multiclan.halfclan_affair_chance")):
+        return love, True
+    if mates:
+        return random.choice(mates), False
+    return None, False
 
+
+def halfclan_love(cat):
+    """The cat from another Clan this cat loves most, if the love is strong enough."""
+    if not get_config("multiclan.halfclan_kits"):
+        return None
+    best, best_romance = None, get_config("multiclan.halfclan_min_romance") - 1
+    for other_id, rel in cat.relationships.items():
+        other = Cat.fetch_cat(other_id)
+        if (
+            not other
+            or other.dead
+            or other.gender == cat.gender
+            or other.no_kits
+            or other.status.group_ID == cat.status.group_ID
+            or not (other.status.alive_in_player_clan or other.status.is_other_clancat)
+            or not cat.is_potential_mate(other, for_love_interest=True)
+        ):
+            continue
+        if rel.romance > best_romance:
+            best, best_romance = other, rel.romance
+    return best
+
+
+def neighbour_clan_of(cat):
+    return next(
+        (c for c in game.clan.all_other_clans if c.group_ID == cat.status.group_ID),
+        None,
+    )
+
+
+def create_litter(clan, mother, father, half_clan=False):
+    """Creates a litter of kits in the mother's (neighbouring) Clan."""
     litter_range = get_config("multiclan.litter_size")
     kits = []
     for _ in range(random.randint(litter_range[0], litter_range[1])):
@@ -284,7 +406,7 @@ def handle_litters(clan, members):
             status_dict={"rank": CatRank.NEWBORN, "group_ID": clan.group_ID},
             parent1=mother.ID,
             parent2=father.ID if father else None,
-            backstory="clanborn",
+            backstory="halfclan1" if half_clan else "clanborn",
         )
         game.clan.add_cat(kit)
         kits.append(kit)
@@ -293,8 +415,39 @@ def handle_litters(clan, members):
         create_relationships_new_cat(kit)
 
     mother.birth_cooldown = get_config("multiclan.birth_cooldown")
-    other_clan_event(
-        f"{mother.name} of {clan.name} has given birth to a litter of "
-        f"{len(kits)} kit{'s' if len(kits) > 1 else ''}.",
-        mother,
-    )
+    count = f"{len(kits)} kit{'s' if len(kits) > 1 else ''}"
+    if half_clan:
+        father_clan = (
+            game.clan if father.status.alive_in_player_clan else neighbour_clan_of(father)
+        )
+        text = (
+            f"{mother.name} of {clan.name} has given birth to a litter of {count}. "
+            f"Their father is {father.name} of {father_clan.name if father_clan else 'another Clan'}, "
+            f"making them half-Clan."
+        )
+        game.cur_events_list.append(
+            EventInformation(
+                text,
+                ["birth_death", "other_clans"],
+                cat_dict={"m_c": mother, "r_c": father},
+            )
+        )
+    else:
+        other_clan_event(
+            f"{mother.name} of {clan.name} has given birth to a litter of {count}.",
+            mother,
+        )
+    return kits
+
+
+def player_halfclan_pregnancy(pregnant_cat, second_parent) -> bool:
+    """
+    When one of your cats has kits with a
+    neighbouring Clan cat. If the neighbour is the one who would carry the kits,
+    they're born into the neighbour's Clan instead. Returns True if handled here.
+    """
+    clan = neighbour_clan_of(pregnant_cat)
+    if not clan:
+        return False
+    create_litter(clan, pregnant_cat, second_parent, half_clan=True)
+    return True

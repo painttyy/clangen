@@ -1191,3 +1191,11 @@ birth_cooldown = 6
 max_crossclan_events = 6
 # show events that only involve neighbouring Clans on the main events page too
 show_neighbour_events_in_all = false
+# chance (0 to 1) each moon that two single cats in each neighbouring Clan become mates
+mate_chance = 0.25
+# allow kits with one parent from another Clan
+halfclan_kits = true
+# how much romance (0 to 100) a cat needs towards a cat from another Clan to have kits with them
+halfclan_min_romance = 10
+# chance (0 to 1) a mated cat in love with another Clan's cat has kits with them instead of their mate
+halfclan_affair_chance = 0.2
