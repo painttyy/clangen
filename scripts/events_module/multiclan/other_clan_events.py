@@ -29,6 +29,7 @@ def handle_other_clans():
         return
 
     mark_halfclan_kits()
+    handle_moving_between_clans()
 
     for clan in game.clan.all_other_clans:
         members = get_members(clan)
@@ -55,6 +56,181 @@ def handle_other_clans():
         handle_relationships(clan, members)
         handle_mates(clan, members)
         handle_litters(clan, members)
+
+
+# ---------------------------------------------------------------------------- #
+#                           moving between Clans                               #
+# ---------------------------------------------------------------------------- #
+
+# ranks that don't leave their Clan
+STAYING_RANKS = (
+    CatRank.LEADER,
+    CatRank.DEPUTY,
+    CatRank.MEDICINE_CAT,
+    CatRank.MEDICINE_APPRENTICE,
+)
+
+
+def clan_of(cat):
+    """The Clan object (yours or a neighbour's) a living cat belongs to."""
+    if cat.status.alive_in_player_clan:
+        return game.clan
+    return neighbour_clan_of(cat)
+
+
+def can_move(cat) -> bool:
+    return (
+        not cat.dead
+        and cat.moons >= 12
+        and cat.status.rank not in STAYING_RANKS
+        and (cat.status.alive_in_player_clan or cat.status.is_other_clancat)
+    )
+
+
+def handle_moving_between_clans():
+    """
+    Cats sometimes leave their Clan for another one:
+    - two cats from different Clans who love each other move in together and become mates
+    - half-Clan cats coming of age may choose their other parent's Clan
+    """
+    if not get_config("multiclan.cats_can_move"):
+        return
+
+    moved = set()
+    cats = [c for c in Cat.all_cats_list if can_move(c)]
+    random.shuffle(cats)
+
+    for cat in cats:
+        if cat.ID in moved or living_mates(cat):
+            continue
+
+        # LOVE: find the cat from another Clan they love most
+        love = cross_clan_sweetheart(cat)
+        if love and love.ID not in moved:
+            if random.random() < get_config("multiclan.move_for_love_chance"):
+                mover, stayer = choose_mover(cat, love)
+                old_clan, new_clan = clan_of(mover), clan_of(stayer)
+                move_cat(mover, new_clan)
+                mover.set_mate(stayer)
+                moved.update({mover.ID, stayer.ID})
+                move_event(
+                    f"{mover.name} has left {old_clan.name} to join {new_clan.name}, "
+                    f"so {mover.name} and {stayer.name} can finally be together as mates.",
+                    mover,
+                    stayer,
+                    old_clan,
+                    new_clan,
+                )
+                continue
+
+        # HALF-CLAN: on reaching 12 moons, they may choose their other parent's Clan
+        if cat.moons == 12:
+            parent = other_clan_parent(cat)
+            if parent and random.random() < get_config("multiclan.halfclan_move_chance"):
+                old_clan, new_clan = clan_of(cat), clan_of(parent)
+                move_cat(cat, new_clan)
+                moved.add(cat.ID)
+                move_event(
+                    f"{cat.name} has always felt torn between two Clans. "
+                    f"Now that {cat.name} is grown, they have left {old_clan.name} "
+                    f"to live in {new_clan.name} alongside {parent.name}.",
+                    cat,
+                    parent,
+                    old_clan,
+                    new_clan,
+                )
+
+
+def cross_clan_sweetheart(cat):
+    """A single cat from another Clan that this cat loves, and who loves them back."""
+    need = get_config("multiclan.move_min_romance")
+    best, best_romance = None, need - 1
+    for other_id, rel in cat.relationships.items():
+        if rel.romance <= best_romance:
+            continue
+        other = Cat.fetch_cat(other_id)
+        if (
+            not other
+            or not can_move(other)  # also checks they're a living Clan cat
+            or other.status.group_ID == cat.status.group_ID
+            or living_mates(other)
+            or cat.no_mates
+            or other.no_mates
+            or not cat.is_potential_mate(other)
+        ):
+            continue
+        back = other.relationships.get(cat.ID)
+        if not back or back.romance < need / 2:
+            continue
+        best, best_romance = other, rel.romance
+    return best
+
+
+def choose_mover(cat_a, cat_b):
+    """Decides which of the pair leaves their Clan. Returns (mover, stayer)."""
+    for mover, stayer in ((cat_a, cat_b), (cat_b, cat_a)):
+        # your cats only leave if that's allowed
+        if mover.status.alive_in_player_clan and not get_config(
+            "multiclan.your_cats_can_leave"
+        ):
+            return stayer, mover
+    return (cat_a, cat_b) if random.random() < 0.5 else (cat_b, cat_a)
+
+
+def other_clan_parent(cat):
+    """A living parent of this cat who lives in a different Clan, if any."""
+    for parent_id in (cat.parent1, cat.parent2):
+        parent = Cat.fetch_cat(parent_id) if parent_id else None
+        if (
+            parent
+            and not parent.dead
+            and (parent.status.alive_in_player_clan or parent.status.is_other_clancat)
+            and parent.status.group_ID != cat.status.group_ID
+        ):
+            if cat.status.alive_in_player_clan and not get_config(
+                "multiclan.your_cats_can_leave"
+            ):
+                return None
+            return parent
+    return None
+
+
+def move_cat(cat, new_clan, bring_kits=True):
+    """Moves a living cat (and their young kits) into another Clan."""
+    from scripts.cat.microservices.add_to_clan import add_to_clan
+
+    old_group = cat.status.group_ID
+    if new_clan is game.clan:
+        add_to_clan(cat)
+    else:
+        cat.status.add_to_group(new_group_ID=new_clan.group_ID, age=cat.age)
+
+    # leaving behind apprentices and mentors
+    for app_id in cat.apprentice.copy():
+        app = Cat.fetch_cat(app_id)
+        if app:
+            app.update_mentor()
+    cat.update_mentor()
+
+    # get to know their new Clanmates
+    create_relationships_new_cat(cat)
+
+    if bring_kits:
+        for kit_id in cat.get_children():
+            kit = Cat.fetch_cat(kit_id)
+            if kit and not kit.dead and kit.moons < 12 and kit.status.group_ID == old_group:
+                move_cat(kit, new_clan, bring_kits=False)
+
+
+def move_event(text, cat, other_cat, old_clan, new_clan):
+    # moves that involve your Clan show on the main page; others are neighbour-only
+    if game.clan in (old_clan, new_clan):
+        types = ["misc"]
+    else:
+        types = ["other_clans"]
+    game.cur_events_list.append(
+        EventInformation(text, types, cat_dict={"m_c": cat, "r_c": other_cat})
+    )
 
 
 def mark_halfclan_kits():

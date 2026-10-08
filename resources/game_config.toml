@@ -1208,3 +1208,13 @@ show_neighbour_interactions = false
 joiner_chance = 0.04
 # chance (0 to 1) each moon that a neighbouring mentor's training shapes their apprentice
 mentor_influence_chance = 0.3
+# allow cats to move between Clans (for love, or half-Clan cats choosing a side)
+cats_can_move = true
+# allow YOUR cats to leave for neighbouring Clans (neighbours can still join you)
+your_cats_can_leave = true
+# how much romance (0 to 100) cats need for each other before one moves for love
+move_min_romance = 40
+# chance (0 to 1) each moon that a qualifying couple moves in together
+move_for_love_chance = 0.15
+# chance (0 to 1) a half-Clan cat joins their other parent's Clan at 12 moons
+halfclan_move_chance = 0.15

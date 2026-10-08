@@ -966,10 +966,19 @@ class ProfileScreen(Screens):
         # LEADER LIVES:
         # Optional - Only shows up for leaders
         if not the_cat.dead and CatRank.LEADER in the_cat.status.rank:
+            lives = game.clan.leader_lives
+            # multiclan: neighbouring leaders have their own lives
+            if the_cat.status.is_other_clancat:
+                lives = next(
+                    (
+                        c.leader_lives
+                        for c in game.clan.all_other_clans
+                        if c.group_ID == the_cat.status.group_ID
+                    ),
+                    lives,
+                )
             output += " "
-            output += i18n.t(
-                "screens.profile.lives_remaining_label", count=game.clan.leader_lives
-            )
+            output += i18n.t("screens.profile.lives_remaining_label", count=lives)
 
         # NEWLINE ----------
         output += "\n"
