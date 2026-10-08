@@ -1189,8 +1189,9 @@ litter_size = [1, 6]
 birth_cooldown = 6
 # most cross-clan relationship events per moon
 max_crossclan_events = 6
-# show events that only involve neighbouring Clans on the main events page too
-show_neighbour_events_in_all = false
+# list events involving only neighbouring Clan cats (their births, deaths, leaders...)
+# under Other Clans. When false, you only see events that involve your own cats.
+show_neighbour_only_events = false
 # chance (0 to 1) each moon that two single cats in each neighbouring Clan become mates
 mate_chance = 0.25
 # allow kits with one parent from another Clan
@@ -1205,3 +1206,5 @@ neighbour_interaction_chance = 0.6
 show_neighbour_interactions = false
 # chance (0 to 1) each moon that a loner or rogue joins each neighbouring Clan
 joiner_chance = 0.04
+# chance (0 to 1) each moon that a neighbouring mentor's training shapes their apprentice
+mentor_influence_chance = 0.3

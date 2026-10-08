@@ -108,7 +108,8 @@ def _viable_cats_by_clan() -> dict:
 def _load_events(is_group: bool) -> list:
     folder = "group_interactions" if is_group else "normal_interactions"
     events = []
-    for biome in ("general", game.clan.biome.lower()):
+    # custom.json is for your own events, kept separate from GeneMod's files
+    for biome in ("general", game.clan.biome.lower(), "custom"):
         path = f"{EVENT_FOLDER}/{folder}/{biome}.json"
         if path not in _loaded:
             _loaded[path] = _convert_file(path)
@@ -329,9 +330,6 @@ def _run_event(event, involved, main_clan, other_clan, rep_clan, viable):
     if rep_change and rep_clan:
         change_clan_relations(rep_clan, rep_change)
 
+    # these are sorted onto the Other Clans tab by hide_neighbour_events()
     types = ["other_clans"]
-    if main_clan is game.clan or other_clan is game.clan:
-        types.append("relation")
-    if event.condition:
-        types.append("health")
     game.cur_events_list.append(EventInformation(text, types, cat_dict=involved))

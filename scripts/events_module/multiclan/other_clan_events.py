@@ -11,7 +11,8 @@ import random
 import i18n
 
 from scripts.cat.cats import Cat
-from scripts.cat.enums import CatAge, CatRank
+from scripts.cat.enums import CatAge, CatGroup, CatRank
+from scripts.clan_package.settings import get_clan_setting
 from scripts.cat.factories.new_cat_factory import NewCatFactory
 from scripts.cat_relations.cat_handle_funcs import create_relationships_new_cat
 from scripts.config import get_config
@@ -50,6 +51,7 @@ def handle_other_clans():
         members = get_members(clan)
 
         handle_succession(clan, members)
+        handle_mentors(clan, members)
         handle_relationships(clan, members)
         handle_mates(clan, members)
         handle_litters(clan, members)
@@ -246,27 +248,41 @@ def other_clan_leader_loses_life(cat) -> bool:
 
 def hide_neighbour_events():
     """
-    Events that only involve neighbouring Clan cats are moved off the main
-    events page; they still show under Other Clans.
+    Sorts this moon's neighbouring Clan events:
+    - events between your cats and neighbouring cats go ONLY to the Other Clans tab
+      (ClanGen's own events about your Clan, like your cats' pregnancies, births,
+      mates and breakups, stay where ClanGen puts them)
+    - events involving only neighbouring cats are removed (or, if
+      show_neighbour_only_events is on, also listed under Other Clans only)
     """
     if not game.clan or game.clan.clancount != "multiclan":
         return
-    if get_config("multiclan.show_neighbour_events_in_all"):
-        return
 
     neighbour_ids = {c.group_ID for c in game.clan.all_other_clans}
+    show_neighbour_only = get_config("multiclan.show_neighbour_only_events")
+    kept = []
     for event in game.cur_events_list:
-        if "other_clans" not in event.types or "interaction" in event.types:
-            continue
         cats = [Cat.fetch_cat(cat_id) for cat_id in event.cats_involved]
-        cats = [c for c in cats if c]
-        if cats and all(
-            (c.status.get_last_living_group() if c.dead else c.status.group_ID)
-            in neighbour_ids
-            for c in cats
-        ):
-            # "interaction" is what ClanGen uses to keep minor events off the main page
-            event.types.append("interaction")
+        groups = {last_group(c) for c in cats if c}
+        has_neighbour = bool(groups & neighbour_ids)
+        has_player = CatGroup.PLAYER_CLAN_ID in groups
+
+        if "other_clans" not in event.types:
+            pass  # ClanGen's own events about your Clan (pregnancies, births, mates...) stay put
+        elif has_neighbour and has_player:
+            # "interaction" is what ClanGen uses to keep events off the main page
+            event.types = ["other_clans", "interaction"]
+        elif has_neighbour:
+            if not show_neighbour_only:
+                continue  # drop it
+            event.types = ["other_clans", "interaction"]
+        kept.append(event)
+    game.cur_events_list[:] = kept
+
+
+def last_group(cat):
+    """The group a cat belongs (or, if dead, last belonged) to."""
+    return cat.status.get_last_living_group() if cat.dead else cat.status.group_ID
 
 
 def get_members(clan) -> list:
@@ -368,6 +384,48 @@ def handle_succession(clan, members):
             elif warriors:
                 clan.medicine_cat = random.choice(warriors)
                 set_rank(clan.medicine_cat, CatRank.MEDICINE_CAT)
+
+
+def handle_mentors(clan, members):
+    """
+    Neighbouring Clan apprentices get mentors from their own Clan, learn from
+    them over time, and become former apprentices once they graduate.
+    Uses ClanGen's own mentor rules (warriors for apprentices, medicine cats
+    for medicine apprentices, mediators for mediator apprentices).
+    """
+    for cat in members:
+        old_mentor = cat.mentor
+
+        if not cat.status.rank.is_any_apprentice_rank():
+            if old_mentor:
+                # they've graduated: ClanGen moves the mentor to former_mentor
+                cat.update_mentor()
+                cat.history.add_mentor_skill_influence_strings()
+                cat.history.add_mentor_facet_influence_strings()
+            continue
+
+        # drop a mentor who died, left, or changed jobs, then find a new one
+        cat.update_mentor()
+        if not cat.mentor:
+            cat.assign_random_mentor()
+
+        mentor = Cat.fetch_cat(cat.mentor) if cat.mentor else None
+        if not mentor:
+            continue
+
+        if cat.mentor != old_mentor:
+            other_clan_event(
+                f"{mentor.name} of {clan.name} has been chosen as {cat.name}'s mentor.",
+                cat,
+            )
+        elif random.random() < get_config("multiclan.mentor_influence_chance"):
+            # training together shapes the apprentice's personality and skills
+            facet = cat.personality.mentor_influence(mentor.personality)
+            skill = cat.skills.mentor_influence(mentor)
+            if facet:
+                cat.history.add_facet_mentor_influence(mentor.ID, facet[0], facet[1])
+            if skill:
+                cat.history.add_skill_mentor_influence(skill[0], skill[1], skill[2])
 
 
 def handle_relationships(clan, members):
@@ -491,10 +549,12 @@ def handle_litters(clan, members):
     if random.random() > chance:
         return
 
+    # with "Pregnancy ignores biology" on, any cat can carry kits
+    any_gender = get_clan_setting("same sex birth")
     mothers = [
         c
         for c in members
-        if c.gender == "female"
+        if (any_gender or c.gender == "female")
         and c.age in ADULT_AGES
         and c.status.rank != CatRank.MEDICINE_CAT
         and not c.birth_cooldown
@@ -513,10 +573,13 @@ def choose_father(mother, clan):
     Returns (father, is_half_clan). Mothers have kits with their mate, or, if
     half-Clan kits are on, sometimes with a cat from another Clan they love.
     """
+    any_gender = get_clan_setting("same sex birth")
     mates = [
         m
         for m in living_mates(mother)
-        if m.gender == "male" and m.status.group_ID == clan.group_ID and not m.no_kits
+        if (any_gender or m.gender != mother.gender)
+        and m.status.group_ID == clan.group_ID
+        and not m.no_kits
     ]
     love = halfclan_love(mother)
     if love and (not mates or random.random() < get_config("multiclan.halfclan_affair_chance")):
@@ -536,7 +599,7 @@ def halfclan_love(cat):
         if (
             not other
             or other.dead
-            or other.gender == cat.gender
+            or (other.gender == cat.gender and not get_clan_setting("same sex birth"))
             or other.no_kits
             or other.status.group_ID == cat.status.group_ID
             or not (other.status.alive_in_player_clan or other.status.is_other_clancat)
@@ -601,7 +664,7 @@ def create_litter(clan, mother, father, half_clan=False):
 
 def player_halfclan_pregnancy(pregnant_cat, second_parent) -> bool:
     """
-    Called from ClanGen's pregnancy code when one of your Clan cats has kits with a
+    Called from ClanGen's pregnancy code when one of YOUR cats has kits with a
     neighbouring Clan cat. If the neighbour is the one who would carry the kits,
     they're born into the neighbour's Clan instead. Returns True if handled here.
     """
