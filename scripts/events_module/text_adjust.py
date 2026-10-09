@@ -464,6 +464,14 @@ def event_text_adjust(
         list_text = adjust_list_text(name_list)
         text = text.replace("multi_cat", list_text)
 
+    # multiclan: name real neighbouring cats ("o_c_n's leader" -> "Ashstar of o_c_n")
+    if "o_c_n" in text and other_clan and not isinstance(other_clan, str):
+        from scripts.events_module.multiclan.neighbour_names import (
+            name_neighbour_cats,
+        )
+
+        text = name_neighbour_cats(text, other_clan)
+
     # other_clan_name
     if "o_c_n" in text and other_clan:
         text = _replace_clan_name(

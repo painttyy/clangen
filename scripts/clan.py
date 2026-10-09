@@ -1447,6 +1447,10 @@ class OtherClan:
             med_cats = [c for c in grown_cats if c.status.rank == CatRank.MEDICINE_CAT]
             self.medicine_cat = med_cats[0] if med_cats else choice(grown_cats)
             self._set_rank(self.medicine_cat, CatRank.MEDICINE_CAT)
+        # starting apprentices get mentors right away
+        for cat in new_cats:
+            if cat.status.rank.is_any_apprentice_rank() and not cat.mentor:
+                cat.assign_random_mentor()
 
     @staticmethod
     def _set_rank(cat, rank):
